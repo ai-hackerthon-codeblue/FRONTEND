@@ -62,6 +62,7 @@ function App() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const lastUpdateTime = useRef(0); // For throttling location updates
     const lastPovUpdateTime = useRef(0); // For throttling POV updates
+    const [userId, setUserId] = useState('test_user_01'); // Added userId state
 
     const getInstruction = () => {
         switch (gameState) {
@@ -157,12 +158,15 @@ function App() {
             const formatPathForAPI = (path) => path.map(p => [p.lat(), p.lng()]);
 
             const trainingData = {
+                user_id: userId, // Added user_id
                 start_location: { lat: startPoint.y, lon: startPoint.x },
                 end_location: { lat: destPoint.y, lon: destPoint.x },
                 path_to_destination: formatPathForAPI(outboundPath),
                 path_back_to_start: formatPathForAPI(inboundPath),
                 time_taken_seconds: durationInSeconds,
             };
+
+            console.log('Sending training data:', trainingData); // Log data before sending
 
             try {
                 const response = await axios.post('/api/trainings', trainingData);
