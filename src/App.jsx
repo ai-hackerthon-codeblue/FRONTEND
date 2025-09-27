@@ -1,9 +1,49 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import MapContainer from './components/MapContainer/MapContainer';
 import PanoramaView from './components/PanoramaView/PanoramaView';
 import ResultsModal from './components/ResultsModal/ResultsModal';
 
 function App() {
+    useEffect(() => {
+        const fetchTrainingData = async () => {
+            try {
+                const trainingId = '-Nq_xyz'; // A hardcoded ID for now
+                const response = await axios.get(`/api/trainings/${trainingId}`);
+                const data = response.data;
+
+                // Convert API data to frontend state format
+                const start = { y: data.start_location.lat, x: data.start_location.lon };
+                const dest = { y: data.end_location.lat, x: data.end_location.lon };
+                const outPath = data.path_to_destination.map(p => new window.naver.maps.LatLng(p[0], p[1]));
+                const inPath = data.path_back_to_start.map(p => new window.naver.maps.LatLng(p[0], p[1]));
+
+                // Update state to display the completed training
+                setStartPoint(start);
+                setDestPoint(dest);
+                setOutboundPath(outPath);
+                setInboundPath(inPath);
+                setCurrentPanoramaPos(start); // Show panorama at the start
+                setTrainingResults({
+                    startPoint: start,
+                    destPoint: dest,
+                    outboundPath: outPath,
+                    inboundPath: inPath,
+                    duration: data.time_taken_seconds * 1000, // Convert to ms
+                    analysis: data.analysis_data, // Pass analysis data to results
+                });
+                setGameState('FINISHED');
+                setIsModalOpen(true); // Open the results modal immediately
+
+            } catch (error) {
+                console.error('Error fetching training data:', error);
+                // Optionally, show an error message to the user
+            }
+        };
+
+        fetchTrainingData();
+    }, []); // Empty dependency array ensures this runs only once on mount
+
     const [gameState, setGameState] = useState('SETTING_START'); // SETTING_START, SETTING_DEST, OUTBOUND, INBOUND, FINISHED
     const [startPoint, setStartPoint] = useState(null);
     const [destPoint, setDestPoint] = useState(null);

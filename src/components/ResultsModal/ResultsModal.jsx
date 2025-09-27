@@ -17,8 +17,15 @@ function ResultsModal({ isOpen, onClose, results }) {
             <div className="modal-content">
                 <h2>훈련 결과</h2>
                 <p>
-                    <strong>소요 시간:</strong> {formatTime(results.duration)}
+                    <strong>소요 시간:</strong> {results ? formatTime(results.duration) : 'N/A'}
                 </p>
+                {results && results.analysis && (
+                    <div className="analysis-section">
+                        <h3>훈련 분석</h3>
+                        <p><strong>분석 요약:</strong> {results.analysis.analysis_summary}</p>
+                        <p><strong>복귀 경로 오차율:</strong> {results.analysis.error_rate.toFixed(2)}%</p>
+                    </div>
+                )}
                 <div className="modal-map-area">
                     <MapContainer
                         startPoint={results.startPoint}
