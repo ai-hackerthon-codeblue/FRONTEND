@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import './PanoramaView.css';
 
-function PanoramaView({ position, onLocationChange }) {
+function PanoramaView({ position, onLocationChange, onPovChange }) {
     const panoramaElement = useRef(null);
     const panorama = useRef(null);
 
@@ -23,20 +23,28 @@ function PanoramaView({ position, onLocationChange }) {
 
         panorama.current = new window.naver.maps.Panorama(panoramaElement.current, panoramaOptions);
 
-        const handleClick = (e) => {
-            const newCoord = panorama.current.getPosition();
-            onLocationChange(newCoord);
-        };
+        const locationListener = window.naver.maps.Event.addListener(panorama.current, 'pano_changed', () => {
+            onLocationChange(panorama.current.getPosition());
+        });
 
-        // 로드뷰의 화살표를 클릭(위치 변경)할 때마다 이벤트 발생
-        const listener = window.naver.maps.Event.addListener(panorama.current, 'position_changed', handleClick);
+        const povListener = window.naver.maps.Event.addListener(panorama.current, 'pov_changed', (pov) => {
+            onPovChange(pov);
+        });
+
+        // Add a click event listener to investigate click-to-move functionality
+        const clickListener = window.naver.maps.Event.addListener(panorama.current, 'click', (e) => {
+            console.log('Panorama clicked:', e);
+            // 'e' should contain information about the click, such as coordinates or direction
+            // We will analyze this output to determine how to implement click-to-move
+        });
 
         return () => {
-            // 컴포넌트 언마운트 시 이벤트 리스너 제거
-            window.naver.maps.Event.removeListener(listener);
+            window.naver.maps.Event.removeListener(locationListener);
+            window.naver.maps.Event.removeListener(povListener);
+            window.naver.maps.Event.removeListener(clickListener); // Clean up the new listener
         }
 
-    }, [position, onLocationChange]);
+    }, [position, onLocationChange, onPovChange]);
 
     return <div ref={panoramaElement} className="panorama-container" />;
 }

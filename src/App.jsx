@@ -1,14 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
+import { useParams } from 'react-router-dom';
 import MapContainer from './components/MapContainer/MapContainer';
 import PanoramaView from './components/PanoramaView/PanoramaView';
 import ResultsModal from './components/ResultsModal/ResultsModal';
 
 function App() {
+    const { trainingId } = useParams();
+
     useEffect(() => {
         const fetchTrainingData = async () => {
+            if (!trainingId) return; // Don't fetch if no ID is present
+
             try {
-                const trainingId = '-Nq_xyz'; // A hardcoded ID for now
                 const response = await axios.get(`/api/trainings/${trainingId}`);
                 const data = response.data;
 
@@ -42,18 +46,22 @@ function App() {
         };
 
         fetchTrainingData();
-    }, []); // Empty dependency array ensures this runs only once on mount
+    }, [trainingId]); // Empty dependency array ensures this runs only once on mount
 
-    const [gameState, setGameState] = useState('SETTING_START'); // SETTING_START, SETTING_DEST, OUTBOUND, INBOUND, FINISHED
+    const [gameState, setGameState] = useState('SETTING_START'); // SETTING_START, SETTING_DEST, OUTBOUND, INBOUND, ANALYZING, FINISHED
     const [startPoint, setStartPoint] = useState(null);
     const [destPoint, setDestPoint] = useState(null);
     const [outboundPath, setOutboundPath] = useState([]);
     const [inboundPath, setInboundPath] = useState([]);
     const [currentPanoramaPos, setCurrentPanoramaPos] = useState(null);
+    const [currentUserPos, setCurrentUserPos] = useState(null);
+    const [currentUserPov, setCurrentUserPov] = useState({ pan: 0 });
 
     const [startTime, setStartTime] = useState(0);
     const [trainingResults, setTrainingResults] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const lastUpdateTime = useRef(0); // For throttling location updates
+    const lastPovUpdateTime = useRef(0); // For throttling POV updates
 
     const getInstruction = () => {
         switch (gameState) {
@@ -65,6 +73,8 @@ function App() {
                 return '로드뷰를 이용해 목적지로 이동하세요. (화면의 화살표 클릭)';
             case 'INBOUND':
                 return '로드뷰를 이용해 다시 출발지로 돌아오세요.';
+            case 'ANALYZING':
+                return '훈련 결과를 분석 중입니다. 잠시만 기다려주세요...';
             case 'FINISHED':
                 return '훈련이 완료되었습니다! 결과를 확인하세요.';
             default:
@@ -72,14 +82,14 @@ function App() {
         }
     };
 
-    const handleMapClick = (coord) => {
+    const handleMapClick = useCallback((coord) => {
         if (gameState === 'SETTING_START') {
             setStartPoint(coord);
             setGameState('SETTING_DEST');
         } else if (gameState === 'SETTING_DEST') {
             setDestPoint(coord);
         }
-    };
+    }, [gameState]);
 
     const startTraining = () => {
         if (startPoint && destPoint) {
@@ -92,8 +102,15 @@ function App() {
         }
     };
 
-    const handleLocationChange = (newCoord) => {
-        // Naver 로드뷰 API는 때때로 동일한 위치 이벤트를 여러 번 발생시키므로 중복을 방지합니다.
+    const handleLocationChange = useCallback((newCoord) => {
+        const now = Date.now();
+        if (now - lastUpdateTime.current < 200) { // Throttle to 200ms
+            return;
+        }
+        lastUpdateTime.current = now;
+
+        setCurrentUserPos(newCoord); // Update current user position in real-time
+
         const isDuplicate = (path, coord) => {
             if (path.length === 0) return false;
             const lastPos = path[path.length - 1];
@@ -101,42 +118,88 @@ function App() {
         };
 
         if (gameState === 'OUTBOUND') {
-            if(!isDuplicate(outboundPath, newCoord)) {
-                setOutboundPath(prev => [...prev, newCoord]);
-            }
+            setOutboundPath(prevPath => {
+                if (!isDuplicate(prevPath, newCoord)) {
+                    return [...prevPath, newCoord];
+                }
+                return prevPath;
+            });
         } else if (gameState === 'INBOUND') {
-            if(!isDuplicate(inboundPath, newCoord)) {
-                setInboundPath(prev => [...prev, newCoord]);
-            }
+            setInboundPath(prevPath => {
+                if (!isDuplicate(prevPath, newCoord)) {
+                    return [...prevPath, newCoord];
+                }
+                return prevPath;
+            });
         }
-    };
+    }, [gameState]);
 
-    const completeLeg = () => {
+    const handlePovChange = useCallback((pov) => {
+        const now = Date.now();
+        if (now - lastPovUpdateTime.current < 100) { // Throttle to 100ms
+            return;
+        }
+        lastPovUpdateTime.current = now;
+        setCurrentUserPov(pov);
+    }, []);
+
+    const completeLeg = async () => {
         if (gameState === 'OUTBOUND') {
             setInboundPath([new window.naver.maps.LatLng(destPoint.y, destPoint.x)]);
             setCurrentPanoramaPos(destPoint);
             setGameState('INBOUND');
         } else if (gameState === 'INBOUND') {
+            setGameState('ANALYZING');
             const endTime = Date.now();
-            setTrainingResults({
-                startPoint,
-                destPoint,
-                outboundPath,
-                inboundPath,
-                duration: endTime - startTime,
-            });
-            setGameState('FINISHED');
-            setIsModalOpen(true);
+            const durationInSeconds = (endTime - startTime) / 1000;
+
+            // Convert LatLng objects to simple arrays for the backend
+            const formatPathForAPI = (path) => path.map(p => [p.lat(), p.lng()]);
+
+            const trainingData = {
+                start_location: { lat: startPoint.y, lon: startPoint.x },
+                end_location: { lat: destPoint.y, lon: destPoint.x },
+                path_to_destination: formatPathForAPI(outboundPath),
+                path_back_to_start: formatPathForAPI(inboundPath),
+                time_taken_seconds: durationInSeconds,
+            };
+
+            try {
+                const response = await axios.post('/api/trainings', trainingData);
+                const { id, analysis_data } = response.data;
+
+                // Update URL to reflect the new training ID without reloading the page
+                window.history.pushState({}, '', `/trainings/${id}`);
+
+                setTrainingResults({
+                    startPoint,
+                    destPoint,
+                    outboundPath,
+                    inboundPath,
+                    duration: durationInSeconds * 1000,
+                    analysis: analysis_data,
+                });
+                setGameState('FINISHED');
+                setIsModalOpen(true);
+            } catch (error) {
+                console.error("Error submitting training for analysis:", error);
+                // Handle error: show a message and revert state
+                alert("결과 분석에 실패했습니다. 다시 시도해주세요.");
+                setGameState('INBOUND'); // Or reset completely
+            }
         }
     };
 
     const resetTraining = () => {
+        window.history.pushState({}, '', '/'); // Reset URL to root
         setGameState('SETTING_START');
         setStartPoint(null);
         setDestPoint(null);
         setOutboundPath([]);
         setInboundPath([]);
         setCurrentPanoramaPos(null);
+        setCurrentUserPos(null); // Reset current user position
+        setCurrentUserPov({ pan: 0 }); // Reset POV
         setTrainingResults(null);
         setIsModalOpen(false);
     };
@@ -153,6 +216,7 @@ function App() {
                         <PanoramaView
                             position={currentPanoramaPos}
                             onLocationChange={handleLocationChange}
+                            onPovChange={handlePovChange}
                         />
                     ) : (
                         <div className="placeholder">훈련을 시작하면 여기에 로드뷰가 표시됩니다.</div>
@@ -164,6 +228,8 @@ function App() {
                         destPoint={destPoint}
                         outboundPath={outboundPath}
                         inboundPath={inboundPath}
+                        currentUserPos={currentUserPos} // Pass current position
+                        currentUserPov={currentUserPov} // Pass current POV
                         onMapClick={handleMapClick}
                         isSettingMode={gameState === 'SETTING_START' || gameState === 'SETTING_DEST'}
                     />
