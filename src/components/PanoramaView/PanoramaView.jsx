@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import './PanoramaView.css';
 
-function PanoramaView({ position, onLocationChange, onPovChange, isNaverMapsLoaded }) {
+function PanoramaView({ position, onLocationChange, onPovChange, isNaverMapsLoaded, onPanoramaStatusChange }) {
     const panoramaElement = useRef(null);
     const panorama = useRef(null);
 
@@ -38,13 +38,21 @@ function PanoramaView({ position, onLocationChange, onPovChange, isNaverMapsLoad
             // We will analyze this output to determine how to implement click-to-move
         });
 
+        // Add pano_status listener
+        const panoStatusListener = window.naver.maps.Event.addListener(panorama.current, 'pano_status', (status) => {
+            if (onPanoramaStatusChange) {
+                onPanoramaStatusChange(status);
+            }
+        });
+
         return () => {
             window.naver.maps.Event.removeListener(locationListener);
             window.naver.maps.Event.removeListener(povListener);
-            window.naver.maps.Event.removeListener(clickListener); // Clean up the new listener
+            window.naver.maps.Event.removeListener(clickListener);
+            window.naver.maps.Event.removeListener(panoStatusListener); // Clean up new listener
         }
 
-    }, [position, onLocationChange, onPovChange, isNaverMapsLoaded]);
+    }, [position, onLocationChange, onPovChange, isNaverMapsLoaded, onPanoramaStatusChange]);
 
     return <div ref={panoramaElement} className="panorama-container" />;
 }

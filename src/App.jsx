@@ -60,10 +60,13 @@ function App() {
     const [startTime, setStartTime] = useState(0);
     const [trainingResults, setTrainingResults] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isArrivalAlarmTriggered, setIsArrivalAlarmTriggered] = useState(false); // New state for arrival alarm
+    const [hasReturnedToStart, setHasReturnedToStart] = useState(false); // New state for return to start
     const lastUpdateTime = useRef(0); // For throttling location updates
     const lastPovUpdateTime = useRef(0); // For throttling POV updates
     const [userId, setUserId] = useState('test_user_01'); // Added userId state
     const [isNaverMapsLoaded, setIsNaverMapsLoaded] = useState(false); // New state for map loading
+    const [panoramaStatus, setPanoramaStatus] = useState(null); // New state for panorama status
 
     useEffect(() => {
         if (window.naver && window.naver.maps) {
@@ -107,19 +110,29 @@ function App() {
     }, [gameState]);
 
     const startTraining = () => {
+        console.log('startTraining called.');
         if (!isNaverMapsLoaded) {
             alert('지도가 아직 로드되지 않았습니다. 잠시 후 다시 시도해주세요.');
             return;
         }
         if (startPoint && destPoint) {
+            console.log('Setting outboundPath, currentPanoramaPos, gameState to OUTBOUND.');
             setOutboundPath([new window.naver.maps.LatLng(startPoint.y, startPoint.x)]);
             setCurrentPanoramaPos(startPoint);
             setGameState('OUTBOUND');
             setStartTime(Date.now());
+            console.log('startTraining: gameState is now OUTBOUND, currentPanoramaPos is', startPoint);
         } else {
             alert('출발지와 목적지를 모두 설정해야 합니다.');
         }
     };
+
+    const handlePanoramaStatusChange = useCallback((status) => {
+        setPanoramaStatus(status);
+        if (status !== window.naver.maps.PanoramaStatus.OK) {
+            console.warn('Panorama not available for this location. Status:', status);
+        }
+    }, []);
 
     const handleLocationChange = useCallback((newCoord) => {
         const now = Date.now();
@@ -129,6 +142,7 @@ function App() {
         lastUpdateTime.current = now;
 
         setCurrentUserPos(newCoord); // Update current user position in real-time
+        console.log('handleLocationChange: currentUserPos updated to', newCoord);
 
         const isDuplicate = (path, coord) => {
             if (path.length === 0) return false;
@@ -139,14 +153,18 @@ function App() {
         if (gameState === 'OUTBOUND') {
             setOutboundPath(prevPath => {
                 if (!isDuplicate(prevPath, newCoord)) {
-                    return [...prevPath, newCoord];
+                    const updatedPath = [...prevPath, newCoord];
+                    console.log('handleLocationChange: outboundPath updated. Length:', updatedPath.length);
+                    return updatedPath;
                 }
                 return prevPath;
             });
         } else if (gameState === 'INBOUND') {
             setInboundPath(prevPath => {
                 if (!isDuplicate(prevPath, newCoord)) {
-                    return [...prevPath, newCoord];
+                    const updatedPath = [...prevPath, newCoord];
+                    console.log('handleLocationChange: inboundPath updated. Length:', updatedPath.length);
+                    return updatedPath;
                 }
                 return prevPath;
             });
@@ -163,53 +181,73 @@ function App() {
     }, []);
 
     const completeLeg = async () => {
+        console.log('completeLeg called. Current gameState:', gameState);
         if (gameState === 'OUTBOUND') {
+            console.log('Transitioning to INBOUND. destPoint:', destPoint);
             setInboundPath([new window.naver.maps.LatLng(destPoint.y, destPoint.x)]);
             setCurrentPanoramaPos(destPoint);
             setGameState('INBOUND');
-        } else if (gameState === 'INBOUND') {
-            setGameState('ANALYZING');
-            const endTime = Date.now();
-            const durationInSeconds = (endTime - startTime) / 1000;
-
-            // Convert LatLng objects to simple arrays for the backend
-            const formatPathForAPI = (path) => path.map(p => [p.lat(), p.lng()]);
-
-            const trainingData = {
-                user_id: userId, // Added user_id
-                start_location: { lat: startPoint.y, lon: startPoint.x },
-                end_location: { lat: destPoint.y, lon: destPoint.x },
-                path_to_destination: formatPathForAPI(outboundPath),
-                path_back_to_start: formatPathForAPI(inboundPath),
-                time_taken_seconds: durationInSeconds,
-            };
-
-            console.log('Sending training data:', trainingData); // Log data before sending
-
-            try {
-                const response = await axios.post('/api/trainings', trainingData);
-                const { id, analysis_data } = response.data;
-
-                // Update URL to reflect the new training ID without reloading the page
-                window.history.pushState({}, '', `/trainings/${id}`);
-
-                setTrainingResults({
-                    startPoint,
-                    destPoint,
-                    outboundPath,
-                    inboundPath,
-                    duration: durationInSeconds * 1000,
-                    analysis: analysis_data,
-                });
-                setGameState('FINISHED');
-                setIsModalOpen(true);
-            } catch (error) {
-                console.error("Error submitting training for analysis:", error);
-                // Handle error: show a message and revert state
-                alert("결과 분석에 실패했습니다. 다시 시도해주세요.");
-                setGameState('INBOUND'); // Or reset completely
-            }
+            setIsArrivalAlarmTriggered(false); // Reset arrival alarm trigger
+            console.log('State updated to INBOUND.');
         }
+    };
+
+    const completeTraining = async () => {
+        console.log('App: completeTraining function executed.');
+        setGameState('ANALYZING');
+        const endTime = Date.now();
+        const durationInSeconds = (endTime - startTime) / 1000;
+
+        // Convert LatLng objects to simple arrays for the backend
+        const formatPathForAPI = (path) => path.map(p => [p.lat(), p.lng()]);
+
+        const trainingData = {
+            user_id: userId, // Added user_id
+            start_location: { lat: startPoint.y, lon: startPoint.x },
+            end_location: { lat: destPoint.y, lon: destPoint.x },
+            path_to_destination: formatPathForAPI(outboundPath),
+            path_back_to_start: formatPathForAPI(inboundPath),
+            time_taken_seconds: durationInSeconds,
+        };
+
+        console.log('Sending training data:', trainingData); // Log data before sending
+
+        try {
+            const response = await axios.post('/api/trainings', trainingData);
+            const { id, analysis_data } = response.data;
+
+            // Update URL to reflect the new training ID without reloading the page
+            window.history.pushState({}, '', `/trainings/${id}`);
+
+            setTrainingResults({
+                startPoint,
+                destPoint,
+                outboundPath,
+                inboundPath,
+                duration: durationInSeconds * 1000,
+                analysis: analysis_data,
+            });
+            setGameState('FINISHED');
+            setIsModalOpen(true);
+        } catch (error) {
+            console.error("Error submitting training for analysis:", error);
+            // Handle error: show a message and revert state
+            alert("결과 분석에 실패했습니다. 다시 시도해주세요.");
+            setGameState('INBOUND'); // Or reset completely
+        }
+    };
+
+    // 자동 훈련 종료 처리 (출발지 복귀 시)
+    useEffect(() => {
+        console.log('App useEffect: hasReturnedToStart changed', hasReturnedToStart, 'gameState:', gameState);
+        if (hasReturnedToStart && gameState === 'INBOUND') {
+            completeTraining();
+        }
+    }, [hasReturnedToStart, gameState, startTime, userId, startPoint, destPoint, outboundPath, inboundPath, completeTraining]);
+
+    const handleStopTracking = () => {
+        // Manually stop training, trigger the completeTraining logic
+        completeTraining();
     };
 
     const resetTraining = () => {
@@ -224,6 +262,8 @@ function App() {
         setCurrentUserPov({ pan: 0 }); // Reset POV
         setTrainingResults(null);
         setIsModalOpen(false);
+        setIsArrivalAlarmTriggered(false); // Reset arrival alarm trigger
+        setHasReturnedToStart(false); // Reset return to start trigger
     };
 
     const getCurrentLocationAndSetStartPoint = () => {
@@ -256,12 +296,21 @@ function App() {
             <main className="main-content">
                 <div className="view-container panorama-section">
                     {currentPanoramaPos ? (
-                        <PanoramaView
-                            position={currentPanoramaPos}
-                            onLocationChange={handleLocationChange}
-                            onPovChange={handlePovChange}
-                            isNaverMapsLoaded={isNaverMapsLoaded} // Pass isNaverMapsLoaded
-                        />
+                        <>
+                            {panoramaStatus !== null && panoramaStatus !== window.naver.maps.PanoramaStatus.OK && (
+                                <div className="panorama-overlay">
+                                    <p>현재 위치에 대한 로드뷰를 찾을 수 없습니다.</p>
+                                    <p>다른 위치를 시도하거나 지도를 확인해주세요.</p>
+                                </div>
+                            )}
+                            <PanoramaView
+                                position={currentPanoramaPos}
+                                onLocationChange={handleLocationChange}
+                                onPovChange={handlePovChange}
+                                isNaverMapsLoaded={isNaverMapsLoaded} // Pass isNaverMapsLoaded
+                                onPanoramaStatusChange={handlePanoramaStatusChange} // Pass the status handler
+                            />
+                        </>
                     ) : (
                         <div className="placeholder">훈련을 시작하면 여기에 로드뷰가 표시됩니다.</div>
                     )}
@@ -276,6 +325,9 @@ function App() {
                         currentUserPov={currentUserPov} // Pass current POV
                         onMapClick={handleMapClick}
                         isSettingMode={gameState === 'SETTING_START' || gameState === 'SETTING_DEST'}
+                        onArrivalAlarmTriggered={setIsArrivalAlarmTriggered} // Pass the setter function
+                        gameState={gameState} // Pass gameState to MapContainer
+                        onReturnToStartDetected={() => setHasReturnedToStart(true)} // Pass callback for return detection
                     />
                 </div>
             </main>
@@ -286,11 +338,11 @@ function App() {
                 { (gameState === 'SETTING_START' || gameState === 'SETTING_DEST') && (
                     <button onClick={startTraining} disabled={!startPoint || !destPoint}>훈련 시작</button>
                 )}
-                { gameState === 'OUTBOUND' && (
+                { gameState === 'OUTBOUND' && isArrivalAlarmTriggered && (
                     <button onClick={completeLeg}>목적지 도착</button>
                 )}
-                { gameState === 'INBOUND' && (
-                    <button onClick={completeLeg}>출발지 복귀 (훈련 종료)</button>
+                { (gameState === 'OUTBOUND' || gameState === 'INBOUND') && (
+                    <button onClick={handleStopTracking}>훈련 종료</button>
                 )}
             </footer>
 

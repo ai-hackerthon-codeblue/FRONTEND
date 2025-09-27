@@ -23,7 +23,10 @@ function ResultsModal({ isOpen, onClose, results }) {
                     <div className="analysis-section">
                         <h3>훈련 분석</h3>
                         <p><strong>분석 요약:</strong> {results.analysis.analysis_summary}</p>
-                        <p><strong>복귀 경로 오차율:</strong> {results.analysis.error_rate.toFixed(2)}%</p>
+                        <p>
+                            <strong>복귀 경로 일치율: </strong>
+                            {(100 - results.analysis.error_rate).toFixed(2)}%
+                        </p>
                     </div>
                 )}
                 <div className="modal-map-area">
@@ -33,6 +36,7 @@ function ResultsModal({ isOpen, onClose, results }) {
                         outboundPath={results.outboundPath}
                         inboundPath={results.inboundPath}
                         isSettingMode={false}
+                        isResultsView={true} // Indicate that this is for results display
                     />
                 </div>
                 <button onClick={onClose} className="modal-close-btn">
