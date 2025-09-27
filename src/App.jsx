@@ -63,6 +63,20 @@ function App() {
     const lastUpdateTime = useRef(0); // For throttling location updates
     const lastPovUpdateTime = useRef(0); // For throttling POV updates
     const [userId, setUserId] = useState('test_user_01'); // Added userId state
+    const [isNaverMapsLoaded, setIsNaverMapsLoaded] = useState(false); // New state for map loading
+
+    useEffect(() => {
+        if (window.naver && window.naver.maps) {
+            // Assign the handler first to ensure it catches the event if it fires very early
+            window.naver.maps.onJSContentLoaded = () => {
+                setIsNaverMapsLoaded(true);
+            };
+            // If it's already loaded (e.g., hot reload or script loaded quickly), set it immediately
+            if (window.naver.maps.jsContentLoaded) {
+                setIsNaverMapsLoaded(true);
+            }
+        }
+    }, []); // Run once on mount
 
     const getInstruction = () => {
         switch (gameState) {
@@ -93,6 +107,10 @@ function App() {
     }, [gameState]);
 
     const startTraining = () => {
+        if (!isNaverMapsLoaded) {
+            alert('지도가 아직 로드되지 않았습니다. 잠시 후 다시 시도해주세요.');
+            return;
+        }
         if (startPoint && destPoint) {
             setOutboundPath([new window.naver.maps.LatLng(startPoint.y, startPoint.x)]);
             setCurrentPanoramaPos(startPoint);
@@ -208,6 +226,27 @@ function App() {
         setIsModalOpen(false);
     };
 
+    const getCurrentLocationAndSetStartPoint = () => {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const { latitude, longitude } = position.coords;
+                    const newStartPoint = { y: latitude, x: longitude };
+                    setStartPoint(newStartPoint);
+                    setGameState('SETTING_DEST');
+                    alert('현재 위치로 출발지가 설정되었습니다.');
+                },
+                (error) => {
+                    console.error('Error getting current location:', error);
+                    alert('현재 위치를 가져오는 데 실패했습니다. 지도에서 직접 출발지를 설정해주세요.');
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        } else {
+            alert('이 브라우저에서는 Geolocation이 지원되지 않습니다. 지도에서 직접 출발지를 설정해주세요.');
+        }
+    };
+
     return (
         <div className="app-container">
             <header className="app-header">
@@ -221,6 +260,7 @@ function App() {
                             position={currentPanoramaPos}
                             onLocationChange={handleLocationChange}
                             onPovChange={handlePovChange}
+                            isNaverMapsLoaded={isNaverMapsLoaded} // Pass isNaverMapsLoaded
                         />
                     ) : (
                         <div className="placeholder">훈련을 시작하면 여기에 로드뷰가 표시됩니다.</div>
@@ -240,6 +280,9 @@ function App() {
                 </div>
             </main>
             <footer className="app-footer">
+                { gameState === 'SETTING_START' && (
+                    <button onClick={getCurrentLocationAndSetStartPoint}>현재 위치로 출발지 설정</button>
+                )}
                 { (gameState === 'SETTING_START' || gameState === 'SETTING_DEST') && (
                     <button onClick={startTraining} disabled={!startPoint || !destPoint}>훈련 시작</button>
                 )}

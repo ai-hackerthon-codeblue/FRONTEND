@@ -1,12 +1,13 @@
 import React, { useEffect, useRef } from 'react';
 import './MapContainer.css';
 
-function MapContainer({                          startPoint,
+function MapContainer({
+                          startPoint,
                           destPoint,
                           outboundPath,
                           inboundPath,
                           currentUserPos,
-                          currentUserPov, // Add currentUserPov to props
+                          currentUserPov,
                           onMapClick,
                           isSettingMode,
                       }) {
@@ -16,13 +17,27 @@ function MapContainer({                          startPoint,
     const destMarker = useRef(null);
     const outboundPolyline = useRef(null);
     const inboundPolyline = useRef(null);
-    const userMarker = useRef(null); // Ref for the real-time user marker
+    const userMarker = useRef(null);
+    const hasArrived = useRef(false);
 
+    // 도착 알림음을 위한 audio 객체 참조
+    const arrivalAudio = useRef(null);
+
+    // 컴포넌트 마운트 시 오디오 객체 생성
+    useEffect(() => {
+        arrivalAudio.current = new Audio('/sounds/arrival.mp3'); // mp3 파일은 public/sounds 폴더에 위치해야 합니다.
+    }, []);
+
+    // 지도 초기화
     useEffect(() => {
         if (!mapElement.current || !window.naver || !window.naver.maps) return;
 
+        const initialCenter = startPoint
+            ? new window.naver.maps.LatLng(startPoint.y, startPoint.x)
+            : new window.naver.maps.LatLng(37.5665, 126.9780);
+
         const mapOptions = {
-            center: new window.naver.maps.LatLng(37.5665, 126.9780),
+            center: initialCenter,
             zoom: 15,
         };
 
@@ -34,9 +49,9 @@ function MapContainer({                          startPoint,
             });
         }
 
-    }, [isSettingMode, onMapClick]);
+    }, [isSettingMode, onMapClick, startPoint]);
 
-    // 마커 업데이트
+    // 시작/도착 마커 업데이트
     useEffect(() => {
         if (!map.current) return;
         if (startPoint) {
@@ -81,16 +96,24 @@ function MapContainer({                          startPoint,
         }
     }, [startPoint, destPoint]);
 
+    // 목적지 변경 시 도착 상태 초기화
+    useEffect(() => {
+        if (destPoint) {
+            hasArrived.current = false;
+        }
+    }, [destPoint]);
+
     // 경로(Polyline) 업데이트
     useEffect(() => {
         if (!map.current) return;
 
+        // Outbound Path (가는 길)
         if (outboundPath && outboundPath.length > 1) {
             if (!outboundPolyline.current) {
                 outboundPolyline.current = new window.naver.maps.Polyline({
                     map: map.current,
                     path: outboundPath,
-                    strokeColor: '#007bff', // 진한 파란색
+                    strokeColor: '#007bff',
                     strokeWeight: 6,
                     strokeOpacity: 0.8,
                 });
@@ -99,12 +122,13 @@ function MapContainer({                          startPoint,
             }
         }
 
+        // Inbound Path (오는 길)
         if (inboundPath && inboundPath.length > 1) {
             if (!inboundPolyline.current) {
                 inboundPolyline.current = new window.naver.maps.Polyline({
                     map: map.current,
                     path: inboundPath,
-                    strokeColor: '#6c757d', // 연한 회색
+                    strokeColor: '#6c757d',
                     strokeWeight: 4,
                     strokeOpacity: 0.7,
                 });
@@ -115,12 +139,13 @@ function MapContainer({                          startPoint,
 
     }, [outboundPath, inboundPath]);
 
-    // 실시간 위치 마커 업데이트
+    // 실시간 위치 마커 업데이트 및 도착 감지 (useEffect 통합 및 수정)
     useEffect(() => {
         if (!map.current || !currentUserPos) return;
 
         const position = new window.naver.maps.LatLng(currentUserPos.y, currentUserPos.x);
 
+        // 사용자 마커 위치 업데이트
         if (!userMarker.current) {
             userMarker.current = new window.naver.maps.Marker({
                 position,
@@ -129,16 +154,38 @@ function MapContainer({                          startPoint,
                     content: '<div class="marker current-user-marker"></div>',
                     anchor: new window.naver.maps.Point(12, 12),
                 },
-                zIndex: 100, // Ensure the marker is always on top
+                zIndex: 100,
             });
         } else {
             userMarker.current.setPosition(position);
         }
 
-        // Center the map on the user's current position
+        // 지도를 사용자 현재 위치로 이동
         map.current.panTo(position);
 
-    }, [currentUserPos]);
+        // 목적지가 설정된 경우에만 도착 감지 로직 실행
+        if (destPoint) {
+            const destPosition = new window.naver.maps.LatLng(destPoint.y, destPoint.x);
+
+            // [수정된 부분] getProjection().getDistance()를 사용하여 거리 계산
+            const distance = map.current.getProjection().getDistance(position, destPosition);
+
+            // 거리가 10m 이하이고, 아직 도착 알림이 울리지 않았다면
+            if (distance <= 10 && !hasArrived.current) {
+                console.log("목적지 10m 이내 도착!");
+
+                if (arrivalAudio.current) {
+                    arrivalAudio.current.play();
+                }
+
+                if (navigator.vibrate) {
+                    navigator.vibrate(200);
+                }
+
+                hasArrived.current = true;
+            }
+        }
+    }, [currentUserPos, destPoint]);
 
     // 실시간 방향 마커 회전
     useEffect(() => {
@@ -146,6 +193,8 @@ function MapContainer({                          startPoint,
 
         const markerElement = userMarker.current.getElement();
         if (markerElement) {
+            // CSS transform을 이용하여 부드러운 회전 효과를 줄 수 있습니다.
+            markerElement.style.transition = 'transform 0.2s linear';
             markerElement.style.transform = `rotate(${currentUserPov.pan}deg)`;
         }
     }, [currentUserPov]);

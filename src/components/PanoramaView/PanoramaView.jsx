@@ -1,12 +1,12 @@
 import React, { useEffect, useRef } from 'react';
 import './PanoramaView.css';
 
-function PanoramaView({ position, onLocationChange, onPovChange }) {
+function PanoramaView({ position, onLocationChange, onPovChange, isNaverMapsLoaded }) {
     const panoramaElement = useRef(null);
     const panorama = useRef(null);
 
     useEffect(() => {
-        if (!panoramaElement.current || !position || !window.naver || !window.naver.maps) return;
+        if (!panoramaElement.current || !position || !window.naver || !window.naver.maps || !isNaverMapsLoaded) return;
 
         const panoramaOptions = {
             position: new window.naver.maps.LatLng(position.y, position.x),
@@ -44,7 +44,7 @@ function PanoramaView({ position, onLocationChange, onPovChange }) {
             window.naver.maps.Event.removeListener(clickListener); // Clean up the new listener
         }
 
-    }, [position, onLocationChange, onPovChange]);
+    }, [position, onLocationChange, onPovChange, isNaverMapsLoaded]);
 
     return <div ref={panoramaElement} className="panorama-container" />;
 }
