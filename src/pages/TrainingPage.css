@@ -1,0 +1,26 @@
+.training-page-container {
+  width: 100vw;
+  height: 100vh;
+  background-color: #000;
+  color: white;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.loading-message {
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+
+.status-overlay {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(0, 0, 0, 0.7);
+  padding: 10px 20px;
+  border-radius: 8px;
+  z-index: 110; /* Roadview 위에 표시 */
+  font-size: 1rem;
+}

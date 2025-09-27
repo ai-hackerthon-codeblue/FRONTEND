@@ -1,0 +1,14 @@
+.common-input {
+  width: 100%;
+  padding: 12px;
+  font-size: 1rem;
+  border: 1px solid #DDDDDD;
+  border-radius: 8px;
+  box-sizing: border-box; /* 패딩과 테두리가 너비에 포함되도록 설정 */
+}
+
+.common-input:focus {
+  outline: none;
+  border-color: #FF7A00;
+  box-shadow: 0 0 0 2px rgba(255, 122, 0, 0.2);
+}

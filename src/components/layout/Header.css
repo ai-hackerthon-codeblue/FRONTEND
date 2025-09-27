@@ -1,0 +1,22 @@
+/* Header.css */
+.app-header {
+  position: absolute; /* 지도 위에 떠 있도록 설정 */
+  top: 0;
+  left: 0;
+  width: 100%;
+  padding: 15px 0;
+  background-color: rgba(255, 255, 255, 0.85); /* 약간 투명한 배경 */
+  backdrop-filter: blur(5px); /* 배경 블러 효과로 세련미 추가 */
+  -webkit-backdrop-filter: blur(5px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  z-index: 10; /* 다른 요소들보다 위에 오도록 설정 */
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.app-title {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #2c3e50; /* 가독성 좋은 어두운 색상 */
+}

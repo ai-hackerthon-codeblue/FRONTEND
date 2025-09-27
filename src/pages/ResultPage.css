@@ -1,0 +1,48 @@
+/* ResultPage.css */
+.result-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.result-title {
+  text-align: center;
+  font-size: 1.8rem;
+  margin: 0 0 10px 0;
+  color: #333;
+}
+
+.result-section {
+  background-color: #f9f9f9;
+  padding: 15px;
+  border-radius: 8px;
+  border: 1px solid #eee;
+}
+
+.section-title {
+  font-size: 1.1rem;
+  margin: 0 0 8px 0;
+  color: #555;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 5px;
+}
+
+.section-content {
+  margin: 0;
+  font-size: 1rem;
+  color: #333;
+}
+
+.analysis-text {
+  line-height: 1.6;
+}
+
+.accuracy-text {
+  font-weight: bold;
+  font-size: 1.2rem;
+  color: #FF7A00;
+}
+
+.result-actions {
+  margin-top: 20px;
+}

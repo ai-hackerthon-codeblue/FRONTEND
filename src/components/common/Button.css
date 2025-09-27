@@ -1,0 +1,24 @@
+.common-button {
+  padding: 12px 24px;
+  font-size: 1.1rem; /* 고령층을 위해 폰트 크기를 약간 크게 설정 */
+  font-weight: bold;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  width: 100%; /* 부모 요소의 너비에 맞춤 */
+}
+
+.common-button.primary {
+  background-color: #FF7A00; /* 예시 색상 (활기찬 주황색) */
+  color: white;
+}
+
+.common-button.primary:hover {
+  background-color: #E66A00;
+}
+
+.common-button:disabled {
+  background-color: #CCCCCC;
+  cursor: not-allowed;
+}

@@ -1,0 +1,38 @@
+/* Roadview.css */
+.roadview-wrapper {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #000;
+  z-index: 100; /* 최상단에 표시 */
+}
+
+.roadview-pano {
+  width: 100%;
+  height: 100%;
+}
+
+.roadview-close {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  width: 44px;
+  height: 44px;
+  font-size: 2rem;
+  font-weight: 300;
+  color: white;
+  background-color: rgba(0, 0, 0, 0.6);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  z-index: 110;
+  line-height: 44px;
+  padding: 0;
+  text-align: center;
+}
+
+.roadview-close:hover {
+  background-color: rgba(0, 0, 0, 0.9);
+}

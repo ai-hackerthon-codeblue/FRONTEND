@@ -1,0 +1,7 @@
+/* HomePage.css */
+.homepage-container {
+  width: 100%;
+  height: 100vh;
+  position: relative; /* 자식 absolute 요소들의 기준점 */
+  overflow: hidden; /* 스크롤바가 생기지 않도록 방지 */
+}
